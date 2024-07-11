@@ -5,11 +5,38 @@ import ccaches
 import json
 import moira
 import os
+import requests
 import tempfile
 
 from bottle import request
 
 MOIRA_TIME_FORMAT = "%d-%b-%Y %H:%M:%S"
+
+def proxied_moira(function):
+    """
+    A decorator that uses Moira indirectly via https://github.com/sipb/moira-rest-api
+    
+    It will add the moira_query function to call as the first argument in the
+    wrapped function.
+    """
+    def wrapped(*args, **kwargs):
+        ticket_data = request.query["webathena"]
+        if not ticket_data:
+            raise KeyError("Missing Webathena ticket!")
+        def moira_query(query, *args):
+            response = requests.post(
+                "https://moira-api.mit.edu/raw_query/" + query,
+                params={"arg": list(args)},
+                headers={
+                    "Authorization": "webathena " + ticket_data
+                },
+                verify='lets_encrypt.crt'
+            )
+            return response.json()
+
+        return function(moira_query, *args, **kwargs)
+    return wrapped
+
 
 def webathena(function):
     """

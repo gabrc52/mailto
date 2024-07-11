@@ -37,7 +37,6 @@
 # the updated list of poboxes in the same format as the GET call.
 #
 
-import moira
 import os
 import re
 
@@ -47,53 +46,47 @@ from datetime import datetime
 
 APP_ROOT = os.path.abspath(os.path.dirname(__file__))
 
-MN = "mailto" # this application's name, for Moira modwith
-
 
 @get("/<user>")
-@webathena
-@moira_auth(MN)
+@proxied_moira
 @json_api
-def get_poboxes(user):
-    return pobox_status(user)
+def get_poboxes(moira_query, user):
+    return pobox_status(moira_query, user)
 
 @put("/<user>/reset")
-@webathena
-@moira_auth(MN)
+@proxied_moira
 @json_api
-def reset(user):
-    moira.query("set_pobox_pop", user)
-    return pobox_status(user)
+def reset(moira_query, user):
+    moira_query("set_pobox_pop", user)
+    return pobox_status(moira_query, user)
 
 @put("/<user>/<address>")
-@webathena
-@moira_auth(MN)
+@proxied_moira
 @json_api
-def put_address(user, address):
+def put_address(moira_query, user, address):
     mtype, box = type_and_box(address)
-    moira.query("set_pobox", user, mtype, box)
-    return pobox_status(user)
+    moira_query("set_pobox", user, mtype, box)
+    return pobox_status(moira_query, user)
 
 @put("/<user>/<internal>/<external>")
-@webathena
-@moira_auth(MN)
+@proxied_moira
 @json_api
-def put_split_addresses(user, internal, external):
+def put_split_addresses(moira_query, user, internal, external):
     internal_mtype, internal_box = type_and_box(internal)
     if internal_mtype == "SMTP":
         abort(400, "Internal address cannot be type SMTP.")
     external_mtype, external_box = type_and_box(external)
     if external_mtype != "SMTP":
         abort(400, "External address must be type SMTP.")
-    moira.query("set_pobox", user, internal_mtype, internal_box)
-    moira.query("set_pobox", user, "SPLIT", external_box)
-    return pobox_status(user)
+    moira_query("set_pobox", user, internal_mtype, internal_box)
+    moira_query("set_pobox", user, "SPLIT", external_box)
+    return pobox_status(moira_query, user)
 
 
-def pobox_status(user):
+def pobox_status(moira_query, user):
     # Run Moira Query
     try:
-        boxinfo = moira.query("get_pobox", user)[0]
+        boxinfo = moira_query("get_pobox", user)[0]
     except moira.MoiraException as e:
         if len(e.args) >= 2 and e[1].lower() == "no such user":
             abort(404, e[1])
